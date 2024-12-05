@@ -1,0 +1,162 @@
+// Run :style <this URL> in the neo4j browser to get coloured graphs
+
+node {
+  diameter: 50px;
+  color: #A5ABB6;
+  border-color: #9AA1AC;
+  border-width: 2px;
+  text-color-internal: #FFFFFF;
+  font-size: 10px;
+}
+
+relationship {
+  color: #A5ABB6;
+  shaft-width: 1px;
+  font-size: 8px;
+  padding: 3px;
+  text-color-external: #000000;
+  text-color-internal: #FFFFFF;
+  caption: "<type>";
+}
+
+/* New Node Styles */
+node.Component {
+  color: #9B6BCF;
+  border-color: #7F4EAE;
+  text-color-internal: #FFFFFF;
+  caption: "{name}";
+}
+
+node.Asset {
+  color: #FF9F40;
+  border-color: #CC7F33;
+  text-color-internal: #2A2C34;
+  caption: "{title}";
+}
+
+node.SecurityControl {
+  color: #60A5FA;
+  border-color: #3B82F6;
+  text-color-internal: #FFFFFF;
+  caption: "{id}";
+}
+
+node.Policy {
+  color: #FCD34D;
+  border-color: #FBBF24;
+  text-color-internal: #2A2C34;
+  caption: "{name}";
+}
+
+node.Standard {
+  color: #34D399;
+  border-color: #10B981;
+  text-color-internal: #2A2C34;
+  caption: "{title}";
+}
+
+node.Vulnerability {
+  color: #EF4444;
+  border-color: #DC2626;
+  text-color-internal: #FFFFFF;
+  caption: "{description}";
+}
+
+node.Procedure {
+  color: #8B5CF6;
+  border-color: #7C3AED;
+  text-color-internal: #FFFFFF;
+  caption: "{title}";
+}
+
+node.Metric {
+  color: #6EE7B7;
+  border-color: #34D399;
+  text-color-internal: #2A2C34;
+  caption: "{value}";
+}
+
+node.Implementation {
+  color: #F87171;
+  border-color: #EF4444;
+  text-color-internal: #FFFFFF;
+  caption: "{id}";
+}
+
+node.Configuration {
+  color: #FDBA74;
+  border-color: #FB923C;
+  text-color-internal: #2A2C34;
+  caption: "{name}";
+}
+
+node.Impact {
+  color: #FACC15;
+  border-color: #EAB308;
+  text-color-internal: #2A2C34;
+  caption: "{description}";
+}
+
+node.Dependency {
+  color: #93C5FD;
+  border-color: #60A5FA;
+  text-color-internal: #FFFFFF;
+  caption: "{title}";
+}
+
+node.Tool {
+  color: #67E8F9;
+  border-color: #22D3EE;
+  text-color-internal: #2A2C34;
+  caption: "{name}";
+}
+
+node.Milestone {
+  color: #A78BFA;
+  border-color: #8B5CF6;
+  text-color-internal: #FFFFFF;
+  caption: "{description}";
+}
+
+node.Incident {
+  color: #FB7185;
+  border-color: #F43F5E;
+  text-color-internal: #FFFFFF;
+  caption: "{summary}";
+}
+
+node.Event {
+  color: #6D28D9;
+  border-color: #5B21B6;
+  text-color-internal: #FFFFFF;
+  caption: "{name}";
+}
+
+node.Person {
+  color: #FCD5CE;
+  border-color: #FCA5A5;
+  text-color-internal: #2A2C34;
+  caption: "{name}";
+}
+
+node.Organization {
+  color: #BBF7D0;
+  border-color: #86EFAC;
+  text-color-internal: #2A2C34;
+  caption: "{short-name}";
+}
+
+node.Audit {
+  color: #F472B6;
+  border-color: #EC4899;
+  text-color-internal: #FFFFFF;
+  caption: "{title}";
+}
+
+node.Goal {
+  color: #C084FC;
+  border-color: #A855F7;
+  text-color-internal: #FFFFFF;
+  caption: "{objective}";
+}
+

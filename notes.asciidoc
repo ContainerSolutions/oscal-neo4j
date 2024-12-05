@@ -1,0 +1,24 @@
+== Start up neo4j
+
+See  ../neo4j.notes
+
+== Run in files (for profiles etc from oscal4neo4j project)
+
+See: ./profiles.sh for profiles
+
+To delete everything: ./delete_all.sh
+
+
+
+== For assessment plan
+
+See examples here:
+https://github.com/usnistgov/oscal-content/tree/main
+
+Am attempting to use:
+
+curl https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/ap/json/ifa_assessment-plan-example-min.json | jq .
+
+See assessment_plan.cypher for how it's going.
+
+

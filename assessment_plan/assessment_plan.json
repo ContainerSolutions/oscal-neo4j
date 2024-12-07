@@ -1,4 +1,4 @@
-X - from ttps://raw.githubusercontent.com/ianmiell/oscal4neo4j/refs/heads/main/data/NIST-800-53/script/load.cypher
+X - from https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/ap/json/ifa_assessment-plan-example.json
 {
   "assessment-plan": {
     "uuid": "60077e84-e62f-4375-8c6c-b0e0d4560c5f",

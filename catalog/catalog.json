@@ -1,5 +1,3 @@
-from https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/catalog/json/basic-catalog.json
-
 {
   "catalog": {
     "uuid": "74c8ba1e-5cd4-4ad1-bbfd-d888e2f6c724",

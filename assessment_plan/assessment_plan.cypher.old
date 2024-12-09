@@ -21,12 +21,10 @@ UNWIND data.`assessment-plan`.metadata.parties AS party
 MERGE (p:Party {uuid: party.uuid})
 SET p.type = party.type,
     p.name = party.name
-WITH ap, p, data, party
 FOREACH (orgUuid IN party.`member-of-organizations` |
   MERGE (org:Organization {uuid: orgUuid})
   MERGE (p)-[:MEMBER_OF]->(org)
 )
-WITH ap, p, data, party
 FOREACH (link IN party.links |
   MERGE (l:Link {href: link.href, rel: link.rel})
   MERGE (p)-[:HAS_LINK]->(l)
@@ -36,8 +34,9 @@ MERGE (ap)-[:HAS_PARTY]->(p)
 // Responsible Parties
 WITH ap, data
 UNWIND data.`assessment-plan`.metadata.`responsible-parties` AS respParty
-MATCH (r:Role {id: respParty.`role-id`})
+WITH respParty, ap, data
 UNWIND respParty.`party-uuids` AS partyUuid
+MATCH (r:Role {id: respParty.`role-id`})
 MATCH (p:Party {uuid: partyUuid})
 MERGE (r)-[:RESPONSIBLE_PARTY]->(p)
 
@@ -48,25 +47,22 @@ MERGE (ap)-[:IMPORTS_SSP]->(ssp)
 
 // Local Definitions: Activities
 WITH ap, data
-UNWIND data.`assessment-plan`.`local-definitions`.activities AS activityData
-MERGE (act:Activity {uuid: activityData.uuid})
-SET act.title = activityData.title,
-    act.description = activityData.description
+UNWIND data.`assessment-plan`.`local-definitions`.activities AS activity
+MERGE (act:Activity {uuid: activity.uuid})
+SET act.title = activity.title,
+    act.description = activity.description
 MERGE (ap)-[:HAS_ACTIVITY]->(act)
-WITH act, activityData, ap, data
-FOREACH (prop IN activityData.props |
+FOREACH (prop IN activity.props |
   MERGE (p:Property {name: prop.name, value: prop.value})
   MERGE (act)-[:HAS_PROPERTY]->(p)
 )
-WITH act, activityData, ap, data
-FOREACH (step IN activityData.steps |
+FOREACH (step IN activity.steps |
   MERGE (s:Step {uuid: step.uuid})
   SET s.title = step.title,
       s.description = step.description
   MERGE (act)-[:HAS_STEP]->(s)
 )
-WITH act, activityData, ap, data
-FOREACH (control IN activityData.`related-controls`.`control-selections` |
+FOREACH (control IN activity.`related-controls`.`control-selections` |
   FOREACH (includedControl IN control.`include-controls` |
     MERGE (c:Control {id: includedControl.`control-id`})
     MERGE (act)-[:RELATES_TO_CONTROL]->(c)
@@ -74,15 +70,14 @@ FOREACH (control IN activityData.`related-controls`.`control-selections` |
 )
 
 // Responsible Roles for Activities
-WITH ap, data
-UNWIND data.`assessment-plan`.`local-definitions`.activities AS activityData
-MATCH (act:Activity {uuid: activityData.uuid})
-UNWIND activityData.`responsible-roles` AS respRole
-MATCH (r:Role {id: respRole.`role-id`})
+WITH ap, data, activity
+UNWIND activity.`responsible-roles` AS respRole
+WITH activity, respRole, ap, data
 UNWIND respRole.`party-uuids` AS partyUuid
+MATCH (r:Role {id: respRole.`role-id`})
 MATCH (p:Party {uuid: partyUuid})
 MERGE (r)-[:RESPONSIBLE_PARTY]->(p)
-MERGE (act)-[:RESPONSIBLE_FOR]->(r)
+MERGE (activity)-[:RESPONSIBLE_FOR]->(r)
 
 // Reviewed Controls
 WITH ap, data
@@ -101,14 +96,13 @@ MERGE (ap)-[:HAS_SUBJECT]->(subj)
 
 // Tasks
 WITH ap, data
-UNWIND data.`assessment-plan`.tasks AS taskData
-MERGE (t:Task {uuid: taskData.uuid})
-SET t.type = taskData.type,
-    t.title = taskData.title,
-    t.remarks = taskData.remarks
+UNWIND data.`assessment-plan`.tasks AS task
+MERGE (t:Task {uuid: task.uuid})
+SET t.type = task.type,
+    t.title = task.title,
+    t.remarks = task.remarks
 MERGE (ap)-[:HAS_TASK]->(t)
-WITH t, taskData
-FOREACH (activity IN taskData.`associated-activities` |
+FOREACH (activity IN task.`associated-activities` |
   MERGE (act:Activity {uuid: activity.`activity-uuid`})
   MERGE (t)-[:ASSOCIATED_WITH]->(act)
   FOREACH (subject IN activity.subjects |
@@ -116,8 +110,8 @@ FOREACH (activity IN taskData.`associated-activities` |
     MERGE (act)-[:HAS_SUBJECT]->(subj)
   )
 )
-WITH t, taskData
-UNWIND taskData.`responsible-roles` AS respRole
+WITH ap, data, task
+UNWIND task.`responsible-roles` AS respRole
 MATCH (r:Role {id: respRole.`role-id`})
 MERGE (t)-[:RESPONSIBLE_FOR]->(r)
 

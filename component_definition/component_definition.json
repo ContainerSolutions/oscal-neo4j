@@ -1,6 +1,3 @@
-From: https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/component-definition/json/example-component-definition.json
-
-
 {
   "component-definition": {
     "uuid": "a7ba800c-a432-44cd-9075-0862cd66da6b",

@@ -1,5 +1,3 @@
-from https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/ssp/json/ssp-example.json
-
 {
   "system-security-plan": {
     "uuid": "cff8385f-108e-40a5-8f7a-82f3dc0eaba8",

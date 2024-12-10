@@ -1,71 +1,149 @@
 WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/ar/json/ifa_assessment-results-example-min.json" AS url
 CALL apoc.load.json(url) YIELD value
 
-// Extract the assessment results
-WITH value['assessment-results'] AS ar
-MERGE (assessmentResults:AssessmentResult {uuid: ar.uuid})
-SET assessmentResults.title = ar.metadata.title,
-    assessmentResults.lastModified = ar.metadata['last-modified'],
-    assessmentResults.version = ar.metadata.version,
-    assessmentResults.oscalVersion = ar.metadata['oscal-version']
+WITH value AS data
+MERGE (ar:AssessmentResults {uuid: data.`assessment-results`.uuid})
+SET ar.title = data.`assessment-results`.metadata.title,
+    ar.lastModified = data.`assessment-results`.metadata.`last-modified`,
+    ar.version = data.`assessment-results`.metadata.version,
+    ar.oscalVersion = data.`assessment-results`.metadata.`oscal-version`
 
-// Create roles and link them to the assessment results
-WITH ar, assessmentResults
-UNWIND ar.metadata.roles AS role
-MERGE (roleNode:Role {id: role.id})
-SET roleNode.title = role.title
-MERGE (roleNode)-[:BELONGS_TO]->(assessmentResults)
+// Roles
+WITH ar, data
+UNWIND data.`assessment-results`.metadata.roles AS role
+MERGE (r:Role {id: role.id})
+SET r.title = role.title
+MERGE (ar)-[:HAS_ROLE]->(r)
 
-// Create parties and link them to the assessment results
-WITH ar, assessmentResults
-UNWIND ar.metadata.parties AS party
-MERGE (partyNode:Party {uuid: party.uuid})
-SET partyNode.type = party.type,
-    partyNode.name = party.name
-MERGE (partyNode)-[:BELONGS_TO]->(assessmentResults)
+// Parties
+WITH ar, data
+UNWIND data.`assessment-results`.metadata.parties AS party
+MERGE (p:Party {uuid: party.uuid})
+SET p.type = party.type,
+    p.name = party.name
+FOREACH (orgUuid IN party.`member-of-organizations` |
+  MERGE (org:Organization {uuid: orgUuid})
+  MERGE (p)-[:MEMBER_OF]->(org)
+)
+FOREACH (link IN party.links |
+  MERGE (l:Link {href: link.href, rel: link.rel})
+  MERGE (p)-[:HAS_LINK]->(l)
+)
+MERGE (ar)-[:HAS_PARTY]->(p)
 
-// Link members to organizations
-WITH ar, assessmentResults
-UNWIND ar.metadata.parties AS party
-UNWIND CASE WHEN party['member-of-organizations'] IS NULL THEN [] ELSE party['member-of-organizations'] END AS orgUuid
-MATCH (orgNode:Party {uuid: orgUuid})
-MERGE (partyNode:Party {uuid: party.uuid})-[:MEMBER_OF]->(orgNode)
+// Responsible Parties
+WITH ar, data
+UNWIND data.`assessment-results`.metadata.`responsible-parties` AS respParty
+UNWIND respParty.`party-uuids` AS partyUuid
+MATCH (role:Role {id: respParty.`role-id`})
+MATCH (p:Party {uuid: partyUuid})
+MERGE (role)-[:RESPONSIBLE_PARTY]->(p)
 
-// Create activities and link them to the assessment results
-WITH ar, assessmentResults
-UNWIND ar['local-definitions'].activities AS activity
-MERGE (activityNode:Activity {uuid: activity.uuid})
-SET activityNode.title = activity.title,
-    activityNode.description = activity.description
-MERGE (assessmentResults)-[:HAS_ACTIVITY]->(activityNode)
+// Import AP
+WITH ar, data
+MERGE (ap:ImportedAP {href: data.`assessment-results`.`import-ap`.href})
+MERGE (ar)-[:IMPORTS_AP]->(ap)
 
-// Link steps to activities and the assessment results
-WITH ar, activity, activityNode, assessmentResults
-UNWIND activity.steps AS step
-MERGE (stepNode:Step {uuid: step.uuid})
-SET stepNode.title = step.title,
-    stepNode.description = step.description
-MERGE (stepNode)-[:PART_OF]->(activityNode)
+// Local Definitions: Activities
+WITH ar, data
+UNWIND data.`assessment-results`.`local-definitions`.activities AS activityData
+MERGE (act:Activity {uuid: activityData.uuid})
+SET act.title = activityData.title,
+    act.description = activityData.description
+MERGE (ar)-[:HAS_ACTIVITY]->(act)
+FOREACH (prop IN activityData.props |
+  MERGE (pr:Property {name: prop.name, value: prop.value})
+  MERGE (act)-[:HAS_PROPERTY]->(pr)
+)
+FOREACH (step IN activityData.steps |
+  MERGE (s:Step {uuid: step.uuid})
+  SET s.title = step.title,
+      s.description = step.description,
+      s.remarks = step.remarks
+  MERGE (act)-[:HAS_STEP]->(s)
+)
+FOREACH (control IN activityData.`related-controls`.`control-selections` |
+  FOREACH (includedControl IN control.`include-controls` |
+    MERGE (c:Control {id: includedControl.`control-id`})
+    MERGE (act)-[:RELATES_TO_CONTROL]->(c)
+  )
+)
+WITH act, activityData, ar, data
+UNWIND activityData.`responsible-roles` AS respRole
+MATCH (role:Role {id: respRole.`role-id`})
+UNWIND respRole.`party-uuids` AS partyUuid
+MATCH (p:Party {uuid: partyUuid})
+MERGE (role)-[:RESPONSIBLE_PARTY]->(p)
+MERGE (act)-[:RESPONSIBLE_FOR]->(role)
 
-// Link responsible roles to activities WITH ar, activity, assessmentResults
-WITH ar, activity, activityNode, assessmentResults
-UNWIND activity['responsible-roles'] AS responsibleRole
-UNWIND responsibleRole['party-uuids'] AS partyUuid
-MATCH (partyNode:Party {uuid: partyUuid})
-MERGE (partyNode)-[:RESPONSIBLE_FOR]->(activityNode)
+// Results
+WITH ar, data
+UNWIND data.`assessment-results`.results AS resultData
+MERGE (res:Result {uuid: resultData.uuid})
+SET res.title = resultData.title,
+    res.description = resultData.description,
+    res.start = resultData.start,
+    res.end = resultData.end
+MERGE (ar)-[:HAS_RESULT]->(res)
 
-// Link related controls to activities
-WITH ar, activity, assessmentResults
-UNWIND activity['related-controls']['control-selections'] AS controlSelection
-UNWIND controlSelection['include-controls'] AS control
-MERGE (controlNode:Control {id: control['control-id']})
-MERGE (activityNode)-[:RELATED_TO]->(controlNode)
+// Local Definitions in Results: Tasks
+WITH res, resultData
+UNWIND resultData.`local-definitions`.tasks AS taskData
+MERGE (task:Task {uuid: taskData.uuid})
+SET task.type = taskData.type,
+    task.title = taskData.title,
+    task.description = taskData.description
+MERGE (res)-[:HAS_TASK]->(task)
+FOREACH (activity IN taskData.`associated-activities` |
+  MERGE (act:Activity {uuid: activity.`activity-uuid`})
+  MERGE (task)-[:ASSOCIATED_WITH]->(act)
+)
 
-WITH ar, assessmentResults
-UNWIND ar['results'] AS results
-MERGE (resultsNode:Results {uuid: results.uuid})
-SET resultsNode.title       = results.title,
-    resultsNode.description = results.description
-MERGE (resultsNode)-[:BELONGS_TO]->(assessmentResults);
+// Reviewed Controls
+WITH res, resultData
+UNWIND resultData.`reviewed-controls`.`control-selections` AS reviewedControl
+FOREACH (includedControl IN reviewedControl.`include-controls` |
+  MERGE (c:Control {id: includedControl.`control-id`})
+  MERGE (res)-[:REVIEWED_CONTROL]->(c)
+)
 
+// Observations
+WITH res, resultData
+UNWIND resultData.observations AS obs
+MERGE (o:Observation {uuid: obs.uuid})
+SET o.title = obs.title,
+    o.description = obs.description,
+    o.collected = obs.collected,
+    o.expires = obs.expires,
+    o.remarks = obs.remarks
+MERGE (res)-[:HAS_OBSERVATION]->(o)
 
+// Risks
+WITH res, resultData
+UNWIND resultData.risks AS risk
+MERGE (r:Risk {uuid: risk.uuid})
+SET r.title = risk.title,
+    r.description = risk.description,
+    r.statement = risk.statement,
+    r.status = risk.status
+MERGE (res)-[:HAS_RISK]->(r)
+
+// Findings
+WITH res, resultData
+UNWIND resultData.findings AS finding
+MERGE (f:Finding {uuid: finding.uuid})
+SET f.title = finding.title,
+    f.description = finding.description
+MERGE (res)-[:HAS_FINDING]->(f)
+
+// Relate Findings to Observations
+WITH f, finding
+UNWIND finding.`related-observations` AS relatedObs
+MATCH (o:Observation {uuid: relatedObs.`observation-uuid`})
+MERGE (f)-[:RELATES_TO_OBSERVATION]->(o)
+
+// Relate Findings to Risks
+WITH f, finding
+UNWIND finding.`related-risks` AS relatedRisk
+MATCH (r:Risk {uuid: relatedRisk.`risk-uuid`})
+MERGE (f)-[:RELATES_TO_RISK]->(r)

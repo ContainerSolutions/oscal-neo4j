@@ -2,21 +2,21 @@ WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/
 CALL apoc.load.json(url) YIELD value
 
 WITH value AS data
-MERGE (def:ComponentDefinition {uuid: data.`component-definition`.uuid})
-SET def.title = data.`component-definition`.metadata.title,
-    def.lastModified = data.`component-definition`.metadata.`last-modified`,
-    def.version = data.`component-definition`.metadata.version,
-    def.oscalVersion = data.`component-definition`.metadata.`oscal-version`
+MERGE (cd:ComponentDefinition {uuid: data.`component-definition`.uuid})
+SET cd.title = data.`component-definition`.metadata.title,
+    cd.lastModified = data.`component-definition`.metadata.`last-modified`,
+    cd.version = data.`component-definition`.metadata.version,
+    cd.oscalVersion = data.`component-definition`.metadata.`oscal-version`
 
-// Handle roles
-WITH def, data
+// Roles
+WITH cd, data
 UNWIND data.`component-definition`.metadata.roles AS role
 MERGE (r:Role {id: role.id})
 SET r.title = role.title
-MERGE (def)-[:HAS_ROLE]->(r)
+MERGE (cd)-[:HAS_ROLE]->(r)
 
-// Handle parties
-WITH def, data
+// Parties
+WITH cd, data
 UNWIND data.`component-definition`.metadata.parties AS party
 MERGE (p:Party {uuid: party.uuid})
 SET p.type = party.type,
@@ -25,67 +25,85 @@ FOREACH (link IN party.links |
   MERGE (l:Link {href: link.href, rel: link.rel})
   MERGE (p)-[:HAS_LINK]->(l)
 )
-MERGE (def)-[:HAS_PARTY]->(p)
+MERGE (cd)-[:HAS_PARTY]->(p)
 
-// Handle components
-WITH def, data
-UNWIND data.`component-definition`.components AS component
-MERGE (c:Component {uuid: component.uuid})
-SET c.type = component.type,
-    c.title = component.title,
-    c.description = component.description,
-    c.purpose = component.purpose
-MERGE (def)-[:HAS_COMPONENT]->(c)
+// Components
+WITH cd, data
+UNWIND data.`component-definition`.components AS componentData
+MERGE (component:Component {uuid: componentData.uuid})
+SET component.type = componentData.type,
+    component.title = componentData.title,
+    component.description = componentData.description,
+    component.purpose = componentData.purpose
+MERGE (cd)-[:HAS_COMPONENT]->(component)
 
-// Link responsible roles
-WITH c, component, def, data
-FOREACH (role IN component.`responsible-roles` |
-  MERGE (r:Role {id: role.`role-id`})
-  MERGE (c)-[:RESPONSIBLE_FOR]->(r)
-  FOREACH (partyUuid IN role.`party-uuids` |
-    MERGE (p:Party {uuid: partyUuid})
-    MERGE (r)-[:ASSOCIATED_WITH]->(p)
-  )
-)
+// Responsible Roles for Components
+WITH cd, component, componentData, data
+UNWIND componentData.`responsible-roles` AS respRole
+MERGE (role:Role {id: respRole.`role-id`})
+MERGE (component)-[:RESPONSIBLE_FOR]->(role)
 
-// Handle protocols
-WITH c, component, def, data
-FOREACH (protocol IN component.protocols |
-  MERGE (prot:Protocol {uuid: protocol.uuid})
-  SET prot.name = protocol.name,
-      prot.title = protocol.title
-  MERGE (c)-[:USES_PROTOCOL]->(prot)
-  FOREACH (portRange IN protocol.`port-ranges` |
-    MERGE (pr:PortRange {start: portRange.start, end: portRange.end, transport: portRange.transport})
-    MERGE (prot)-[:HAS_PORT_RANGE]->(pr)
-  )
-)
+// Match and Connect Parties to Responsible Roles
+WITH cd, component, respRole, role, componentData, data
+UNWIND respRole.`party-uuids` AS partyUuid
+MATCH (p:Party {uuid: partyUuid})
+MERGE (role)-[:ASSOCIATED_WITH]->(p)
 
-// Handle control implementations
-WITH c, component, def, data
-FOREACH (controlImpl IN component.`control-implementations` |
-  MERGE (ci:ControlImplementation {uuid: controlImpl.uuid, source: controlImpl.source})
-  SET ci.description = controlImpl.description
-  MERGE (c)-[:IMPLEMENTS_CONTROL]->(ci)
-  FOREACH (req IN controlImpl.`implemented-requirements` |
-    MERGE (ir:ImplementedRequirement {uuid: req.uuid, controlId: req.`control-id`})
-    SET ir.description = req.description
-    MERGE (ci)-[:HAS_REQUIREMENT]->(ir)
-    FOREACH (param IN req.`set-parameters` |
-      MERGE (paramNode:Parameter {id: param.`param-id`})
-      SET paramNode.values = param.values
-      MERGE (ir)-[:HAS_PARAMETER]->(paramNode)
-    )
-    FOREACH (stmt IN req.statements |
-      MERGE (s:Statement {id: stmt.`statement-id`, uuid: stmt.uuid})
-      SET s.description = stmt.description
-      MERGE (ir)-[:HAS_STATEMENT]->(s)
-      FOREACH (respRole IN stmt.`responsible-roles` |
-        MERGE (r:Role {id: respRole.`role-id`})
-        MERGE (s)-[:RESPONSIBLE_ROLE]->(r)
-      )
-    )
-  )
-)
+// Protocols
+WITH cd, component, componentData, data
+UNWIND componentData.protocols AS protocol
+MERGE (prot:Protocol {uuid: protocol.uuid})
+SET prot.name = protocol.name,
+    prot.title = protocol.title
+MERGE (component)-[:USES_PROTOCOL]->(prot)
 
+WITH cd, prot, protocol, component, componentData, data
+UNWIND protocol.`port-ranges` AS portRange
+MERGE (pr:PortRange {start: portRange.start, end: portRange.end, transport: portRange.transport})
+MERGE (prot)-[:HAS_PORT_RANGE]->(pr)
+
+// Control Implementations
+WITH cd, component, componentData, data
+UNWIND componentData.`control-implementations` AS controlImpl
+MERGE (ci:ControlImplementation {uuid: controlImpl.uuid, source: controlImpl.source})
+SET ci.description = controlImpl.description
+MERGE (component)-[:IMPLEMENTS_CONTROL]->(ci)
+
+// Requirements and Parameters
+WITH cd, ci, controlImpl, data
+UNWIND controlImpl.`implemented-requirements` AS req
+MERGE (ir:ImplementedRequirement {uuid: req.uuid, controlId: req.`control-id`})
+SET ir.description = req.description
+MERGE (ci)-[:HAS_REQUIREMENT]->(ir)
+
+// Parameters
+WITH cd, ir, req, data
+UNWIND req.`set-parameters` AS param
+MERGE (paramNode:Parameter {id: param.`param-id`})
+SET paramNode.values = param.values
+MERGE (ir)-[:HAS_PARAMETER]->(paramNode)
+
+// Statements
+WITH cd, ir, req, data
+UNWIND req.statements AS stmt
+MERGE (s:Statement {id: stmt.`statement-id`, uuid: stmt.uuid})
+SET s.description = stmt.description
+MERGE (ir)-[:HAS_STATEMENT]->(s)
+
+// Responsible Roles for Statements
+WITH cd, s, stmt, data
+UNWIND stmt.`responsible-roles` AS respRole
+MATCH (role:Role {id: respRole.`role-id`})
+MERGE (s)-[:RESPONSIBLE_ROLE]->(role)
+
+// Back Matter Resources
+WITH cd, data
+UNWIND data.`component-definition`.`back-matter`.resources AS resource
+MERGE (res:Resource {uuid: resource.uuid})
+SET res.description = resource.description
+MERGE (cd)-[:HAS_RESOURCE]->(res)
+WITH res, resource
+UNWIND resource.rlinks AS rlink
+MERGE (rl:ResourceLink {href: rlink.href, mediaType: rlink.`media-type`})
+MERGE (res)-[:HAS_LINK]->(rl)
 

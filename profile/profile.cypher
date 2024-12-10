@@ -1,174 +1,100 @@
 // 1. create nodes and relations for groups, controls, params :
 WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/master/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json" AS url
-CALL apoc.load.json(url, '$.catalog.groups') YIELD value
-UNWIND value AS group
+CALL apoc.load.json(url) YIELD value
 
-MERGE (g:rev5Group {id: group.id})
-SET g.class = group.class
-SET g.title = group.title
-SET g.layer = 'Catalog'
-WITH g, group
+WITH value AS data
+MERGE (catalog:Catalog {uuid: data.catalog.uuid})
+SET catalog.title = data.catalog.metadata.title,
+    catalog.published = data.catalog.metadata.published,
+    catalog.lastModified = data.catalog.metadata.`last-modified`,
+    catalog.version = data.catalog.metadata.version,
+    catalog.oscalVersion = data.catalog.metadata.`oscal-version`,
+    catalog.remarks = data.catalog.metadata.remarks
 
-UNWIND group.controls AS control
-MERGE (c:rev5Control {id: control.id})
-SET c.title = control.title
-SET c.class = control.class
-SET c.layer = 'Catalog'
-MERGE (c)-[:IN_GROUP]->(g)
+// Groups
+WITH catalog, data
+UNWIND data.catalog.groups AS groupData
+MERGE (group:Group {id: groupData.id})
+SET group.title = groupData.title
+MERGE (catalog)-[:HAS_GROUP]->(group)
 
-FOREACH ( param in control.params |
-MERGE (c)-[:HAS_PARAM]->(p:ControlParam {id:param.id})
-SET p.label = param.label
-SET p.select_howmany = param.select.`how-many`
-SET p.select_choice = param.select.choice
-SET p.layer = 'Catalog'
-SET p.guidelines_prose = param.guidelines[0].prose
+// Group Properties
+WITH catalog, group, groupData
+FOREACH (prop IN groupData.props |
+  MERGE (property:Property {name: prop.name, value: prop.value})
+  MERGE (group)-[:HAS_PROPERTY]->(property)
 )
 
-FOREACH ( prop IN control.props |
-MERGE (c) -[:HAS_PROP]->(pro:ControlProp {name:prop.name})
-SET pro.value = prop.value
+// Subgroups and Controls
+WITH catalog, group, groupData
+UNWIND groupData.groups AS subgroupData
+MERGE (subgroup:Group {id: subgroupData.id})
+SET subgroup.title = subgroupData.title
+MERGE (group)-[:HAS_SUBGROUP]->(subgroup)
+
+// Subgroup Properties
+WITH catalog, group, subgroup, subgroupData
+FOREACH (subProp IN subgroupData.props |
+  MERGE (subGroupProp:Property {name: subProp.name, value: subProp.value})
+  MERGE (subgroup)-[:HAS_PROPERTY]->(subGroupProp)
 )
 
-WITH c, control
-UNWIND control.controls AS enhancement
-MERGE (e:Enhancement:rev5Control {id: enhancement.id})
-SET e.title = enhancement.title
-SET e.class = enhancement.class
-SET e.layer = 'Catalog'
-MERGE (e)-[:IS_ENHANCEMENT_OF]->(c)
+// Controls within Subgroups
+WITH catalog, group, subgroup, subgroupData
+FOREACH (control IN subgroupData.controls |
+  MERGE (c:Control {id: control.id})
+  SET c.title = control.title
+  MERGE (subgroup)-[:HAS_CONTROL]->(c)
 
-FOREACH ( param in enhancement.params |
-MERGE (e)-[:HAS_PARAM]->(p:ControlParam {id:param.id})
-SET p.label = param.label
-SET p.select_howmany = param.select.`how-many`
-SET p.select_choice = param.select.choice
-SET p.layer = 'Catalog'
-SET p.guidelines_prose = param.guidelines[0].prose
+  // Control Properties
+  FOREACH (controlProp IN control.props |
+    MERGE (controlProperty:Property {name: controlProp.name, value: controlProp.value})
+    MERGE (c)-[:HAS_PROPERTY]->(controlProperty)
+  )
+
+  // Control Parameters
+  FOREACH (param IN control.params |
+    MERGE (p:Parameter {id: param.id})
+    SET p.label = param.label
+    MERGE (c)-[:HAS_PARAMETER]->(p)
+
+    // Parameter Selections
+    FOREACH (choice IN param.select.choice |
+      MERGE (sel:Selection {howMany: param.select.`how-many`, choice: choice})
+      MERGE (p)-[:HAS_SELECTION]->(sel)
+    )
+  )
+
+  // Control Parts
+  FOREACH (part IN control.parts |
+    MERGE (partNode:Part {id: part.id, name: part.name})
+    SET partNode.prose = part.prose
+    MERGE (c)-[:HAS_PART]->(partNode)
+
+    // Subparts
+    FOREACH (subpart IN part.parts |
+      MERGE (subPartNode:Part {id: subpart.id, name: subpart.name})
+      SET subPartNode.prose = subpart.prose
+      MERGE (partNode)-[:HAS_PART]->(subPartNode)
+    )
+  )
 )
 
-FOREACH ( prop IN enhancement.props |
-MERGE (e) -[:HAS_PROP]->(pro:ControlProp {name:prop.name})
-SET pro.value = prop.value
-);
-
-// 1b. Create index on ID
-CREATE INDEX c_id_idx IF NOT EXISTS FOR (n:rev5Control) ON (n.id);
-CREATE INDEX cparam_id_idx IF NOT EXISTS FOR (n:ControlParam) ON (n.id);
-CREATE INDEX cpart_id_idx IF NOT EXISTS FOR (n:ControlPart) ON (n.id);
-CREATE INDEX bkmtr_id_idx IF NOT EXISTS FOR (n:Backmatter) ON (n.id);
-
-// 2. create parts with props:
-WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/master/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json" AS url
-CALL apoc.load.json(url, '$.catalog.groups[*].controls[*]..parts[*] ') YIELD value
-UNWIND value AS part
-
-// (Assessment sub-parts have no ID, we have to exclude them from the outer loop.)
-WITH part
-WHERE NOT part.id IS NULL
-
-MERGE (pa:ControlPart {id: part.id})
-SET pa.name = part.name
-SET pa.prose = part.prose
-SET pa.layer = 'Catalog'
-
-FOREACH (prop IN part.props |
-MERGE (pa)-[:HAS_PROP]->(pr:PartProp {name:prop.name})
-SET pr.value = prop.value
-SET pr.layer = 'Catalog'
+// Nested Subgroups
+WITH catalog, subgroup, subgroupData
+FOREACH (nestedGroup IN subgroupData.groups |
+  MERGE (nested:Group {id: nestedGroup.id})
+  SET nested.title = nestedGroup.title
+  MERGE (subgroup)-[:HAS_SUBGROUP]->(nested)
 )
 
-// Add subparts (without ID) here:
-FOREACH (subpart in part.parts |
-MERGE (pa)-[:HAS_PART]->(pp:SubPart {name:subpart.name})
-SET pp.prose = subpart.prose
-SET pp.layer = 'Catalog'
-);
-
-// 3. link controls to their parts by id substring:
-MATCH (c:rev5Control)
-MATCH (p:ControlPart)
-WHERE p.id =~ '^'+c.id+'_.*$'
-MERGE (c)-[:HAS_PART]->(p);
-
-
-// 4. link controls to each other
-WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/master/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json" AS url
-CALL apoc.load.json(url, '$.catalog.groups') YIELD value
-UNWIND value AS group
-UNWIND group.controls as control
-UNWIND control.links as link
-
-MATCH (c1:rev5Control {id: control.id})
-MATCH (c2:rev5Control)
-WHERE c2.id = split(link.href,'#')[1]
-
-MERGE (c1)-[r:RELATED]->(c2)
-SET r.type = link.rel
-
-WITH control
-UNWIND control.controls AS enhancement
-UNWIND enhancement.links AS elink
-
-MATCH (e:rev5Control{id: enhancement.id})
-MATCH (c3:rev5Control)
-WHERE c3.id = split(elink.href,'#')[1]
-
-MERGE (e)-[er:RELATED]->(c3)
-SET er.type = elink.rel;
-
-
-// 5. import back-matter
-WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/master/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json" AS url
-CALL apoc.load.json(url, '$.catalog.back-matter.resources') YIELD value
-UNWIND value AS resource
-
-MERGE (b:Backmatter {id: resource.uuid})
-SET b.layer = 'Catalog'
-SET b.title = resource.title
-SET b.citation = resource.citation.text
-SET b.href = resource.rlinks[0].href;
-
-
-// 6. link controls to backmatter
-WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/master/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json" AS url
-CALL apoc.load.json(url, '$.catalog.groups') YIELD value
-UNWIND value AS group
-UNWIND group.controls as control
-UNWIND control.links as link
-
-MATCH (c1:rev5Control {id: control.id})
-MATCH (b:Backmatter)
-WHERE b.id = split(link.href,'#')[1]
-
-MERGE (c1)-[r:REFERENCES]->(b)
-
-WITH control
-UNWIND control.controls AS enhancement
-UNWIND enhancement.links AS elink
-
-MATCH (e:rev5Control{id: enhancement.id})
-MATCH (b2:Backmatter)
-WHERE b2.id = split(elink.href,'#')[1]
-
-MERGE (e)-[er:REFERENCES]->(b2);
-
-// 7. Assessment parts:
-// Update assessment-method-parts with their contained assessment-objects-parts:
-// name:assessment-objective, id:ac-2.1_obj, prose:...
-// name:assessment-method, id:ac-2.1_asm-examine, props[x].name:method, props[x].value:examine,
-// name:assessment-method, id:ac-2.1_asm-test
-// assessment-objects: children of name:assessment-method.parts
-
-//set assessment layer on assessment parts:
-//xxx
-
-
-//  delete all:
-// MATCH (n:ControlParam) DETACH DELETE n;
-// MATCH (n:ControlProp) DETACH DELETE n;
-// MATCH (n:PartProp) DETACH DELETE n;
-// MATCH (n:rev5Control) DETACH DELETE n;
-// MATCH (n:rev5Group) DETACH DELETE n;
-// MATCH (n:PartLabel) DETACH DELETE n;
-
+// Back Matter
+WITH catalog, data
+UNWIND data.catalog.`back-matter`.resources AS resource
+MERGE (res:Resource {uuid: resource.uuid})
+SET res.description = resource.description
+MERGE (catalog)-[:HAS_RESOURCE]->(res)
+FOREACH (rlink IN resource.rlinks |
+  MERGE (rl:ResourceLink {href: rlink.href, mediaType: rlink.`media-type`})
+  MERGE (res)-[:HAS_LINK]->(rl)
+)

@@ -1,5 +1,5 @@
-WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/poam/json/ifa_plan-of-action-and-milestones.json" AS url
-CALL apoc.load.json(url) YIELD value
+CALL apoc.load.json('file:///plan_of_action_and_milestones/plan_of_action_and_milestones.json') YIELD value
+
 
 WITH value AS data
 MERGE (poam:PlanOfActionAndMilestones {uuid: data.`plan-of-action-and-milestones`.uuid})

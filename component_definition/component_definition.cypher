@@ -1,5 +1,4 @@
-WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/component-definition/json/example-component-definition.json" AS url
-CALL apoc.load.json(url) YIELD value
+CALL apoc.load.json('file:///component_definition/component_definition.json') YIELD value
 
 WITH value AS data
 MERGE (cd:ComponentDefinition {uuid: data.`component-definition`.uuid})

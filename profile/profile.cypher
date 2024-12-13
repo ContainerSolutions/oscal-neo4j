@@ -1,6 +1,5 @@
-// 1. create nodes and relations for groups, controls, params :
-WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/master/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json" AS url
-CALL apoc.load.json(url) YIELD value
+//JSON from: https://raw.githubusercontent.com/usnistgov/oscal-content/master/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json"
+CALL apoc.load.json('file:///profile/profile.json') YIELD value
 
 WITH value AS data
 MERGE (catalog:Catalog {uuid: data.catalog.uuid})

@@ -1,4 +1,6 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)"
+cd "${SCRIPT_DIR}"
 docker stop neo4j && docker rm neo4j  && \
 docker run \
   --name neo4j \
@@ -11,5 +13,6 @@ docker run \
   -e NEO4J_apoc_import_file_enabled=true \
   -e NEO4J_apoc_import_http_enabled=true \
   -e NEO4J_browser_remote__content__hostname__whitelist='*' \
+  -v $(pwd):/import \
   -d \
   neo4j

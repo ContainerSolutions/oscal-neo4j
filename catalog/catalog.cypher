@@ -1,5 +1,5 @@
-WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/catalog/json/basic-catalog.json" AS url
-CALL apoc.load.json(url) YIELD value
+// JSON from: https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/catalog/json/basic-catalog.json
+CALL apoc.load.json('file:///catalog/catalog.json') YIELD value
 
 WITH value AS data
 MERGE (catalog:Catalog {uuid: data.catalog.uuid})

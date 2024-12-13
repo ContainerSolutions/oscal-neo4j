@@ -1,5 +1,5 @@
-WITH "https://raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/ap/json/ifa_assessment-plan-example-min.json" AS url
-CALL apoc.load.json(url) YIELD value
+// JSON from: https//raw.githubusercontent.com/usnistgov/oscal-content/refs/heads/main/examples/ap/json/ifa_assessment-plan-example-min.json
+CALL apoc.load.json('file:///assessment_plan/assessment_plan.json') YIELD value
 
 WITH value AS data
 MERGE (ap:AssessmentPlan {uuid: data.`assessment-plan`.uuid})

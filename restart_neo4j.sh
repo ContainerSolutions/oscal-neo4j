@@ -16,3 +16,13 @@ docker run \
   -v $(pwd):/import \
   -d \
   neo4j
+
+while true
+do
+	echo 'Waiting until started...'
+	sleep 3
+	if docker logs neo4j | grep Started
+	then
+		break
+	fi
+done

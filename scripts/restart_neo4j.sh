@@ -1,6 +1,6 @@
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)"
-cd "${SCRIPT_DIR}"
+cd "${SCRIPT_DIR}"/..
 docker stop neo4j && docker rm neo4j  && \
 docker run \
   --name neo4j \
@@ -17,10 +17,11 @@ docker run \
   -d \
   neo4j
 
+echo 'Waiting until database started'
 while true
 do
-	echo 'Waiting until started...'
-	sleep 3
+    echo -n .
+	sleep 1
 	if docker logs neo4j | grep Started
 	then
 		break

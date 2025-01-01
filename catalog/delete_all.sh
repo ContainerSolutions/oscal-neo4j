@@ -1,1 +1,1 @@
-../delete_all.sh
+../scripts/delete_all.sh

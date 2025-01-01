@@ -1,1 +1,0 @@
-../scripts/delete_all.sh

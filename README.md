@@ -12,6 +12,8 @@ Examples are from [here](https://github.com/usnistgov/oscal-content/tree/main/ex
 
 Each example from the [OSCAL repo](https://github.com/usnistgov/oscal-content/tree/main/examples) has a corresponding folder. In that folder is:
 
-- a Neo4J `.cypher` file
+- a Neo4J `FOLDER.cypher` file
 
-- the example `.json` file
+- the example `FOLDER.json` file
+
+- a `load_FOLDER.sh` file, which loads the `.json` file using the `.cypher` file into the Neo4J database

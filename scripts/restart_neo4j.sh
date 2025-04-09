@@ -1,7 +1,7 @@
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)"
 cd "${SCRIPT_DIR}"/..
-docker stop neo4j && docker rm neo4j  && \
+docker rm -f neo4j || true
 docker run \
   --name neo4j \
   -p 7474:7474 \
